@@ -10,6 +10,41 @@ from dataset import load_data, add_noise
 from models import Autoencoder
 
 
+class EarlyStopping:
+    """早停机制"""
+    def __init__(self, patience=PATIENCE, min_delta=0.0001, mode='min'):
+        self.patience = patience
+        self.min_delta = min_delta
+        self.mode = mode
+        self.counter = 0
+        self.best_score = None
+        self.early_stop = False
+        self.best_epoch = 0
+    
+    def __call__(self, score, epoch):
+        if self.best_score is None:
+            self.best_score = score
+            self.best_epoch = epoch
+            return False
+        
+        if self.mode == 'min':
+            improved = score < self.best_score - self.min_delta
+        else:
+            improved = score > self.best_score + self.min_delta
+        
+        if improved:
+            self.best_score = score
+            self.best_epoch = epoch
+            self.counter = 0
+        else:
+            self.counter += 1
+            if self.counter >= self.patience:
+                self.early_stop = True
+                print(f"\n⏹️  Early Stopping! 最佳Epoch: {self.best_epoch+1}")
+        
+        return self.early_stop
+
+
 def train_autoencoder(train_loader, test_loader):
     """训练自编码器"""
     print("\n" + "=" * 60)
@@ -19,19 +54,18 @@ def train_autoencoder(train_loader, test_loader):
     # 初始化模型
     model = Autoencoder().to(DEVICE)
     criterion = nn.MSELoss()
-    optimizer = torch.optim.Adam(model.parameters(), lr=AE_LR)
+    optimizer = torch.optim.Adam(model.parameters(), lr=AE_LR, weight_decay=1e-5)
     
     # 学习率调度器
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-        optimizer, mode='min', factor=0.5, patience=5, verbose=True
+        optimizer, mode='min', factor=0.5, patience=8, verbose=True
     )
     
-    # 记录训练过程
-    history = {
-        'train_loss': [],
-        'test_loss': []
-    }
+    # Early Stopping
+    early_stopping = EarlyStopping(patience=PATIENCE, mode='min')
     
+    # 记录训练过程
+    history = {'train_loss': [], 'test_loss': []}
     best_loss = float('inf')
     
     for epoch in range(AE_EPOCHS):
@@ -84,10 +118,14 @@ def train_autoencoder(train_loader, test_loader):
             best_loss = avg_test_loss
             torch.save(model.state_dict(), MODEL_DIR / "autoencoder_best.pth")
             print(f"  💾 保存最佳模型 (loss: {best_loss:.4f})")
+        
+        # Early Stopping检查
+        if early_stopping(avg_test_loss, epoch):
+            break
     
     # 保存最终模型
     torch.save(model.state_dict(), MODEL_DIR / "autoencoder_final.pth")
-    print(f"\n✅ 自编码器训练完成！最佳Loss: {best_loss:.4f}")
+    print(f"\n✅ 自编码器训练完成！最佳Loss: {best_loss:.4f} (Epoch {early_stopping.best_epoch+1})")
     
     return model, history
 

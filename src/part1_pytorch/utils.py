@@ -152,7 +152,7 @@ if __name__ == "__main__":
     get_device_info()
     
     from dataset import load_data
-    train_loader, _, _, _ = load_data()
+    train_loader, _, _, _, _ = load_data()
     
     plot_data_samples(train_loader)
     plot_noisy_comparison(train_loader)

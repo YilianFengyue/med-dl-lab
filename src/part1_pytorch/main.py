@@ -41,7 +41,7 @@ def run_full_pipeline():
     print("\n" + "=" * 60)
     print("📦 Step 1/4: 加载数据集")
     print("=" * 60)
-    train_loader, test_loader, train_dataset, test_dataset = load_data()
+    train_loader, test_loader, train_dataset, test_dataset, class_weights = load_data()
     
     # ==================== 2. 训练自编码器 ====================
     print("\n" + "=" * 60)
@@ -55,7 +55,7 @@ def run_full_pipeline():
     print("\n" + "=" * 60)
     print("🧠 Step 3/4: 训练CNN分类器")
     print("=" * 60)
-    cnn, cnn_history = train_cnn(train_loader, test_loader, autoencoder)
+    cnn, cnn_history = train_cnn(train_loader, test_loader, autoencoder, class_weights)
     plot_cnn_history(cnn_history)
     
     # ==================== 4. 评估 ====================
@@ -82,7 +82,7 @@ def run_train_only():
     print_banner()
     print_config()
     
-    train_loader, test_loader, _, _ = load_data()
+    train_loader, test_loader, _, _, class_weights = load_data()
     
     # 训练自编码器
     autoencoder, ae_history = train_autoencoder(train_loader, test_loader)
@@ -90,7 +90,7 @@ def run_train_only():
     visualize_denoising(autoencoder, test_loader)
     
     # 训练CNN
-    cnn, cnn_history = train_cnn(train_loader, test_loader, autoencoder)
+    cnn, cnn_history = train_cnn(train_loader, test_loader, autoencoder, class_weights)
     plot_cnn_history(cnn_history)
     
     print("\n✅ 训练完成！")
@@ -101,7 +101,7 @@ def run_eval_only():
     print_banner()
     print_config()
     
-    _, test_loader, _, _ = load_data()
+    _, test_loader, _, _, _ = load_data()
     
     # 加载模型
     autoencoder = Autoencoder().to(DEVICE)

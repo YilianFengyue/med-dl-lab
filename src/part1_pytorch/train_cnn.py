@@ -1,5 +1,6 @@
 """
-CNN训练模块
+CNN训练模块 - 增强版
+添加: Early Stopping + 类别权重 + 更强正则化
 """
 import torch
 import torch.nn as nn
@@ -10,23 +11,70 @@ from dataset import load_data, add_noise
 from models import Autoencoder, CNN
 
 
-def train_cnn(train_loader, test_loader, autoencoder):
+class EarlyStopping:
+    """早停机制"""
+    def __init__(self, patience=PATIENCE, min_delta=MIN_DELTA, mode='max'):
+        self.patience = patience
+        self.min_delta = min_delta
+        self.mode = mode
+        self.counter = 0
+        self.best_score = None
+        self.early_stop = False
+        self.best_epoch = 0
+    
+    def __call__(self, score, epoch):
+        if self.best_score is None:
+            self.best_score = score
+            self.best_epoch = epoch
+            return False
+        
+        if self.mode == 'min':
+            improved = score < self.best_score - self.min_delta
+        else:
+            improved = score > self.best_score + self.min_delta
+        
+        if improved:
+            self.best_score = score
+            self.best_epoch = epoch
+            self.counter = 0
+        else:
+            self.counter += 1
+            if self.counter >= self.patience:
+                self.early_stop = True
+                print(f"\n⏹️  Early Stopping! 最佳Epoch: {self.best_epoch+1}, 最佳Acc: {self.best_score:.2f}%")
+        
+        return self.early_stop
+
+
+def train_cnn(train_loader, test_loader, autoencoder, class_weights):
     """训练CNN分类器"""
     print("\n" + "=" * 60)
-    print("🚀 开始训练CNN分类器")
+    print("🚀 开始训练CNN分类器 (增强版)")
     print("=" * 60)
     
     # 初始化模型
     model = CNN().to(DEVICE)
     autoencoder.eval()  # 自编码器设为评估模式
     
-    criterion = nn.CrossEntropyLoss()
-    optimizer = torch.optim.Adam(model.parameters(), lr=CNN_LR)
+    # 使用类别权重的交叉熵损失
+    class_weights = class_weights.to(DEVICE)
+    criterion = nn.CrossEntropyLoss(weight=class_weights)
+    print(f"⚖️  使用类别权重: {class_weights.tolist()}")
     
-    # 学习率调度器
-    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-        optimizer, mode='max', factor=0.5, patience=5, verbose=True
+    # 优化器 + L2正则化
+    optimizer = torch.optim.AdamW(
+        model.parameters(), 
+        lr=CNN_LR, 
+        weight_decay=1e-4  # L2正则化
     )
+    
+    # 学习率调度 - 余弦退火
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(
+        optimizer, T_0=10, T_mult=2, eta_min=1e-6
+    )
+    
+    # Early Stopping
+    early_stopping = EarlyStopping(patience=PATIENCE, min_delta=MIN_DELTA, mode='max')
     
     # 记录训练过程
     history = {
@@ -56,6 +104,10 @@ def train_cnn(train_loader, test_loader, autoencoder):
             output = model(denoised_data)
             loss = criterion(output, label)
             loss.backward()
+            
+            # 梯度裁剪，防止梯度爆炸
+            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+            
             optimizer.step()
             
             train_loss += loss.item()
@@ -67,6 +119,9 @@ def train_cnn(train_loader, test_loader, autoencoder):
                 'loss': f'{loss.item():.4f}',
                 'acc': f'{100. * train_correct / train_total:.1f}%'
             })
+        
+        # 更新学习率
+        scheduler.step()
         
         avg_train_loss = train_loss / len(train_loader)
         train_acc = 100. * train_correct / train_total
@@ -97,23 +152,30 @@ def train_cnn(train_loader, test_loader, autoencoder):
         history['test_loss'].append(avg_test_loss)
         history['test_acc'].append(test_acc)
         
-        # 更新学习率
-        scheduler.step(test_acc)
-        
         # 打印结果
+        current_lr = optimizer.param_groups[0]['lr']
         print(f"[CNN] Epoch {epoch+1:02d}/{CNN_EPOCHS} | "
               f"Train Loss: {avg_train_loss:.4f} Acc: {train_acc:.2f}% | "
-              f"Test Loss: {avg_test_loss:.4f} Acc: {test_acc:.2f}%")
+              f"Test Loss: {avg_test_loss:.4f} Acc: {test_acc:.2f}% | "
+              f"LR: {current_lr:.6f}")
         
         # 保存最佳模型
         if test_acc > best_acc:
             best_acc = test_acc
             torch.save(model.state_dict(), MODEL_DIR / "cnn_best.pth")
             print(f"  💾 保存最佳模型 (acc: {best_acc:.2f}%)")
+        
+        # Early Stopping检查
+        if early_stopping(test_acc, epoch):
+            break
     
     # 保存最终模型
     torch.save(model.state_dict(), MODEL_DIR / "cnn_final.pth")
-    print(f"\n✅ CNN训练完成！最佳准确率: {best_acc:.2f}%")
+    
+    # 加载最佳模型用于后续评估
+    model.load_state_dict(torch.load(MODEL_DIR / "cnn_best.pth"))
+    print(f"\n✅ CNN训练完成！最佳准确率: {best_acc:.2f}% (Epoch {early_stopping.best_epoch+1})")
+    print(f"📦 已加载最佳模型用于评估")
     
     return model, history
 
@@ -151,6 +213,9 @@ def plot_cnn_history(history):
                     arrowprops=dict(arrowstyle='->', color='red'),
                     fontsize=10, color='red')
     
+    # 添加早停标记
+    axes[1].axvline(x=best_idx + 1, color='green', linestyle='--', alpha=0.7, label='Best Epoch')
+    
     plt.tight_layout()
     plt.savefig(FIGURE_DIR / "cnn_training_history.png", dpi=150, bbox_inches='tight')
     plt.show()
@@ -161,7 +226,7 @@ if __name__ == "__main__":
     print_config()
     
     # 加载数据
-    train_loader, test_loader, _, _ = load_data()
+    train_loader, test_loader, _, _, class_weights = load_data()
     
     # 加载预训练的自编码器
     autoencoder = Autoencoder().to(DEVICE)
@@ -169,5 +234,5 @@ if __name__ == "__main__":
     print("✅ 已加载预训练自编码器")
     
     # 训练CNN
-    model, history = train_cnn(train_loader, test_loader, autoencoder)
+    model, history = train_cnn(train_loader, test_loader, autoencoder, class_weights)
     plot_cnn_history(history)

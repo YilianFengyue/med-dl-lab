@@ -75,61 +75,81 @@ class Autoencoder(nn.Module):
 
 class CNN(nn.Module):
     """
-    图像分类CNN
-    结构: 1x256x256 → 卷积层 → 全连接层 → 3类输出
+    图像分类CNN - 增强正则化版本
+    添加BatchNorm + 更强Dropout防止过拟合
     """
     def __init__(self):
         super(CNN, self).__init__()
         
-        # 卷积层
-        self.conv1 = nn.Conv2d(1, 16, kernel_size=3, stride=1, padding=1)
-        self.conv2 = nn.Conv2d(16, 32, kernel_size=3, stride=1, padding=1)
-        self.pool = nn.MaxPool2d(kernel_size=2, stride=2, padding=0)
+        # 特征提取层 (带BatchNorm)
+        self.features = nn.Sequential(
+            # Block 1: 1x256x256 -> 16x128x128
+            nn.Conv2d(1, 16, kernel_size=3, stride=1, padding=1),
+            nn.BatchNorm2d(16),
+            nn.ReLU(inplace=True),
+            nn.MaxPool2d(kernel_size=2, stride=2),
+            nn.Dropout2d(0.25),
+            
+            # Block 2: 16x128x128 -> 32x64x64
+            nn.Conv2d(16, 32, kernel_size=3, stride=1, padding=1),
+            nn.BatchNorm2d(32),
+            nn.ReLU(inplace=True),
+            nn.MaxPool2d(kernel_size=2, stride=2),
+            nn.Dropout2d(0.25),
+            
+            # Block 3: 32x64x64 -> 64x32x32 (新增层)
+            nn.Conv2d(32, 64, kernel_size=3, stride=1, padding=1),
+            nn.BatchNorm2d(64),
+            nn.ReLU(inplace=True),
+            nn.MaxPool2d(kernel_size=2, stride=2),
+            nn.Dropout2d(0.25),
+        )
         
-        # 全连接层
-        # 经过2次池化: 256 -> 128 -> 64, 通道数32
-        self.fc1 = nn.Linear(32 * 64 * 64, 128)
-        self.fc2 = nn.Linear(128, 32)
-        self.fc3 = nn.Linear(32, NUM_CLASSES)
+        # 全局平均池化 (大幅减少参数)
+        self.global_pool = nn.AdaptiveAvgPool2d((4, 4))
         
-        # Dropout防止过拟合
-        self.dropout = nn.Dropout(0.5)
+        # 分类器
+        self.classifier = nn.Sequential(
+            nn.Flatten(),
+            nn.Linear(64 * 4 * 4, 128),
+            nn.BatchNorm1d(128),
+            nn.ReLU(inplace=True),
+            nn.Dropout(0.5),
+            nn.Linear(128, 32),
+            nn.ReLU(inplace=True),
+            nn.Dropout(0.3),
+            nn.Linear(32, NUM_CLASSES)
+        )
     
     def forward(self, x):
-        # 卷积 + 激活 + 池化
-        x = self.pool(F.relu(self.conv1(x)))  # 1x256x256 -> 16x128x128
-        x = self.pool(F.relu(self.conv2(x)))  # 16x128x128 -> 32x64x64
-        
-        # 展平
-        x = x.view(-1, 32 * 64 * 64)
-        
-        # 全连接层
-        x = F.relu(self.fc1(x))
-        x = self.dropout(x)
-        x = F.relu(self.fc2(x))
-        x = self.fc3(x)  # 不加softmax，CrossEntropyLoss会处理
-        
+        x = self.features(x)
+        x = self.global_pool(x)
+        x = self.classifier(x)
         return x
     
     def get_architecture(self):
         """返回模型架构描述"""
         return """
         ┌─────────────────────────────────────────────────────┐
-        │                  CNN Architecture                   │
+        │           CNN Architecture (Enhanced)               │
         ├─────────────────────────────────────────────────────┤
         │ Input:  1 × 256 × 256                               │
         ├─────────────────────────────────────────────────────┤
         │ FEATURE EXTRACTION:                                 │
-        │   Conv2d(1→16, k=3, p=1) + ReLU  → 16 × 256 × 256  │
-        │   MaxPool2d(2)                    → 16 × 128 × 128  │
-        │   Conv2d(16→32, k=3, p=1) + ReLU → 32 × 128 × 128  │
-        │   MaxPool2d(2)                    → 32 × 64 × 64    │
+        │   Conv2d(1→16) + BN + ReLU       → 16 × 256 × 256  │
+        │   MaxPool2d(2) + Dropout2d(0.25) → 16 × 128 × 128  │
+        │   Conv2d(16→32) + BN + ReLU      → 32 × 128 × 128  │
+        │   MaxPool2d(2) + Dropout2d(0.25) → 32 × 64 × 64    │
+        │   Conv2d(32→64) + BN + ReLU      → 64 × 64 × 64    │
+        │   MaxPool2d(2) + Dropout2d(0.25) → 64 × 32 × 32    │
+        │   AdaptiveAvgPool2d(4,4)         → 64 × 4 × 4      │
         ├─────────────────────────────────────────────────────┤
         │ CLASSIFIER:                                         │
-        │   Flatten                         → 131072          │
-        │   Linear(131072→128) + ReLU       → 128             │
+        │   Flatten                         → 1024            │
+        │   Linear(1024→128) + BN + ReLU    → 128             │
         │   Dropout(0.5)                                      │
         │   Linear(128→32) + ReLU           → 32              │
+        │   Dropout(0.3)                                      │
         │   Linear(32→3)                    → 3               │
         ├─────────────────────────────────────────────────────┤
         │ Output: 3 (Covid, Normal, Viral Pneumonia)          │
