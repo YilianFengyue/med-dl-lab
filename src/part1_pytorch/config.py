@@ -23,23 +23,29 @@ IMG_SIZE = 256
 IMG_CHANNELS = 1  # 灰度图
 
 # 自编码器参数
-AE_EPOCHS = 80
-AE_BATCH_SIZE = 16  # 小batch增加噪声，有正则化效果
+AE_EPOCHS = 30
+AE_BATCH_SIZE = 16
 AE_LR = 0.0005
-NOISE_FACTOR = 0.4  # 稍微降低噪声
+NOISE_FACTOR = 0.3  # 降低噪声，保留更多纹理
 
 # CNN参数
-CNN_EPOCHS = 100  # 配合Early Stopping
+CNN_EPOCHS = 60
 CNN_BATCH_SIZE = 16
-CNN_LR = 0.0003  # 降低学习率
+CNN_LR = 0.0005
 NUM_CLASSES = 3
 
+# 端到端联合训练参数 (V3核心)
+E2E_EPOCHS = 50
+E2E_LR_AE = 0.00005   # AE用更小的学习率微调
+E2E_LR_CNN = 0.0003   # CNN正常学习率
+E2E_AE_WEIGHT = 0.1   # 重建loss的权重(辅助)
+
 # Early Stopping
-PATIENCE = 15  # 15个epoch没提升就停止
-MIN_DELTA = 0.5  # 最小提升阈值（准确率%）
+PATIENCE = 20  # 增加耐心
+MIN_DELTA = 0.3  # 降低阈值
 
 # 数据增强强度
-AUGMENT_LEVEL = 'strong'  # 'light', 'medium', 'strong'
+AUGMENT_LEVEL = 'strong'
 
 # 设备
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -60,8 +66,9 @@ def print_config():
     print("-" * 50)
     print(f"🤖 自编码器: epochs={AE_EPOCHS}, batch={AE_BATCH_SIZE}, lr={AE_LR}")
     print(f"🧠 CNN: epochs={CNN_EPOCHS}, batch={CNN_BATCH_SIZE}, lr={CNN_LR}")
+    print(f"🔗 端到端: epochs={E2E_EPOCHS}, lr_ae={E2E_LR_AE}, lr_cnn={E2E_LR_CNN}")
     print(f"⏹️  Early Stopping: patience={PATIENCE}, min_delta={MIN_DELTA}%")
-    print(f"🔄 数据增强: {AUGMENT_LEVEL}")
+    print(f"🔄 数据增强: {AUGMENT_LEVEL}, 噪声因子: {NOISE_FACTOR}")
     print("=" * 50)
 
 if __name__ == "__main__":

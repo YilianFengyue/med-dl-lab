@@ -332,7 +332,19 @@ Exp6
 │     └─ review
 │        ├─ drugsComTest_raw.csv
 │        └─ drugsComTrain_raw.csv
-├─ data.zip
+├─ outputsv3_02
+│  ├─ figures
+│  │  ├─ autoencoder_denoising.png
+│  │  ├─ autoencoder_loss.png
+│  │  ├─ cnn_training_history.png
+│  │  ├─ confusion_matrix.png
+│  │  ├─ confusion_matrix_normalized.png
+│  │  ├─ e2e_training_history.png
+│  │  ├─ per_class_metrics.png
+│  │  ├─ precision_recall_curves.png
+│  │  ├─ roc_curves.png
+│  │  └─ sample_predictions.png
+│  └─ models
 ├─ README.md
 ├─ requirements.txt
 ├─ run.ps1
@@ -345,8 +357,10 @@ Exp6
 │     ├─ models.py
 │     ├─ train_autoencoder.py
 │     ├─ train_cnn.py
+│     ├─ train_e2e.py
 │     └─ utils.py
 ├─ 《科学计算与数学建模》实验指导书.docx
-└─ 《科学计算与数学建模》实验指导书.pdf
+├─ 《科学计算与数学建模》实验指导书.pdf
+└─ 记录.md
 
 ```

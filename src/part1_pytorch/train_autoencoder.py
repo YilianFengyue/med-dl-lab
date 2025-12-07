@@ -11,8 +11,8 @@ from models import Autoencoder
 
 
 class EarlyStopping:
-    """早停机制"""
-    def __init__(self, patience=PATIENCE, min_delta=0.0001, mode='min'):
+    """早停机制 - 自编码器专用"""
+    def __init__(self, patience=PATIENCE, min_delta=0.001, mode='min'):
         self.patience = patience
         self.min_delta = min_delta
         self.mode = mode
@@ -20,8 +20,15 @@ class EarlyStopping:
         self.best_score = None
         self.early_stop = False
         self.best_epoch = 0
+        self.wait_epochs = 5  # 至少训练5个epoch再考虑停止
     
     def __call__(self, score, epoch):
+        if epoch < self.wait_epochs:
+            if self.best_score is None or score < self.best_score:
+                self.best_score = score
+                self.best_epoch = epoch
+            return False
+        
         if self.best_score is None:
             self.best_score = score
             self.best_epoch = epoch
@@ -203,8 +210,9 @@ def plot_ae_loss(history):
 
 
 if __name__ == "__main__":
+    from config import print_config
     print_config()
-    train_loader, test_loader, _, _ = load_data()
+    train_loader, test_loader, _, _, _ = load_data()
     model, history = train_autoencoder(train_loader, test_loader)
     plot_ae_loss(history)
     visualize_denoising(model, test_loader)

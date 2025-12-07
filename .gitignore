@@ -7,7 +7,7 @@ __pycache__/
 *.coverage
 .coverage.*
 htmlcov/
-
+envs/
 # ---- Virtual environments ----
 .venv/
 venv/
@@ -48,3 +48,6 @@ data.zip
 checkpoints/
 runs/
 outputs/
+outputs_v2/
+outputs_v1_overfit/
+outputs_v3_01/

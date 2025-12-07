@@ -173,7 +173,7 @@ def train_cnn(train_loader, test_loader, autoencoder, class_weights):
     torch.save(model.state_dict(), MODEL_DIR / "cnn_final.pth")
     
     # 加载最佳模型用于后续评估
-    model.load_state_dict(torch.load(MODEL_DIR / "cnn_best.pth"))
+    model.load_state_dict(torch.load(MODEL_DIR / "cnn_best.pth", weights_only=True))
     print(f"\n✅ CNN训练完成！最佳准确率: {best_acc:.2f}% (Epoch {early_stopping.best_epoch+1})")
     print(f"📦 已加载最佳模型用于评估")
     
@@ -223,6 +223,7 @@ def plot_cnn_history(history):
 
 
 if __name__ == "__main__":
+    from config import print_config
     print_config()
     
     # 加载数据
@@ -230,7 +231,7 @@ if __name__ == "__main__":
     
     # 加载预训练的自编码器
     autoencoder = Autoencoder().to(DEVICE)
-    autoencoder.load_state_dict(torch.load(MODEL_DIR / "autoencoder_best.pth"))
+    autoencoder.load_state_dict(torch.load(MODEL_DIR / "autoencoder_best.pth", weights_only=True))
     print("✅ 已加载预训练自编码器")
     
     # 训练CNN
